@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 declare global {
-  var activeSandbox: any;
+  var activeSandboxId: string | null;
   var sandboxData: any;
   var existingFiles: Set<string>;
 }
@@ -13,15 +13,16 @@ export async function POST() {
     let sandboxKilled = false;
     
     // Kill existing sandbox if any
-    if (global.activeSandbox) {
+    if (global.activeSandboxId) {
       try {
-        await global.activeSandbox.close();
+        const { deleteSandbox } = await import('@/lib/sandboxd');
+        await deleteSandbox(global.activeSandboxId);
         sandboxKilled = true;
         console.log('[kill-sandbox] Sandbox closed successfully');
       } catch (e) {
         console.error('[kill-sandbox] Failed to close sandbox:', e);
       }
-      global.activeSandbox = null;
+      global.activeSandboxId = null;
       global.sandboxData = null;
     }
     

@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Sandbox } from '@e2b/code-interpreter';
+import { execSandbox } from '@/lib/sandboxd';
 
 // Get active sandbox from global state (in production, use a proper state management solution)
 declare global {
-  var activeSandbox: any;
+  var activeSandboxId: string | null;
 }
 
 export async function POST(request: NextRequest) {
@@ -17,34 +17,17 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
     
-    if (!global.activeSandbox) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'No active sandbox' 
+    if (!global.activeSandboxId) {
+      return NextResponse.json({
+        success: false,
+        error: 'No active sandbox'
       }, { status: 400 });
     }
     
     console.log(`[run-command] Executing: ${command}`);
     
-    const result = await global.activeSandbox.runCode(`
-import subprocess
-import os
-
-os.chdir('/home/user/app')
-result = subprocess.run(${JSON.stringify(command.split(' '))}, 
-                       capture_output=True, 
-                       text=True, 
-                       shell=False)
-
-print("STDOUT:")
-print(result.stdout)
-if result.stderr:
-    print("\\nSTDERR:")
-    print(result.stderr)
-print(f"\\nReturn code: {result.returncode}")
-    `);
-    
-    const output = result.logs.stdout.join('\n');
+    const result = await execSandbox(global.activeSandboxId!, `cd /home/user/app && ${command}`);
+    const output = result.stdout + (result.stderr ? `\n${result.stderr}` : '');
     
     return NextResponse.json({
       success: true,

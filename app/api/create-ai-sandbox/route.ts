@@ -1,31 +1,31 @@
 import { NextResponse } from 'next/server';
-import { Sandbox } from '@e2b/code-interpreter';
 import type { SandboxState } from '@/types/sandbox';
 import { appConfig } from '@/config/app.config';
+import { createSandbox, execSandbox, deleteSandbox } from '@/lib/sandboxd';
 
 // Store active sandbox globally
 declare global {
-  var activeSandbox: any;
+  var activeSandboxId: string | null;
   var sandboxData: any;
   var existingFiles: Set<string>;
   var sandboxState: SandboxState;
 }
 
 export async function POST() {
-  let sandbox: any = null;
+  let sandboxId: string | null = null;
 
   try {
     console.log('[create-ai-sandbox] Creating base sandbox...');
     
     // Kill existing sandbox if any
-    if (global.activeSandbox) {
+    if (global.activeSandboxId) {
       console.log('[create-ai-sandbox] Killing existing sandbox...');
       try {
-        await global.activeSandbox.kill();
+        await deleteSandbox(global.activeSandboxId);
       } catch (e) {
         console.error('Failed to close existing sandbox:', e);
       }
-      global.activeSandbox = null;
+      global.activeSandboxId = null;
     }
     
     // Clear existing files tracking
@@ -36,17 +36,14 @@ export async function POST() {
     }
 
     // Create base sandbox - we'll set up Vite ourselves for full control
-    console.log(`[create-ai-sandbox] Creating base E2B sandbox with ${appConfig.e2b.timeoutMinutes} minute timeout...`);
-    sandbox = await Sandbox.create({ 
-      apiKey: process.env.E2B_API_KEY,
-      timeoutMs: appConfig.e2b.timeoutMs
-    });
-    
-    const sandboxId = (sandbox as any).sandboxId || Date.now().toString();
-    const host = (sandbox as any).getHost(appConfig.e2b.vitePort);
-    
+    console.log('[create-ai-sandbox] Creating sandbox via sandboxd...');
+    const info = await createSandbox();
+    sandboxId = info.id;
+    const host = info.host;
+    const url = `http://${info.host}:${info.port}`;
+
     console.log(`[create-ai-sandbox] Sandbox created: ${sandboxId}`);
-    console.log(`[create-ai-sandbox] Sandbox host: ${host}`);
+    console.log(`[create-ai-sandbox] Sandbox host: ${url}`);
 
     // Set up a basic Vite React app using Python to write files
     console.log('[create-ai-sandbox] Setting up Vite React app...');
@@ -226,88 +223,28 @@ print('\\nAll files created successfully!')
 `;
 
     // Execute the setup script
-    await sandbox.runCode(setupScript);
+    await execSandbox(sandboxId!, `python - <<'PY'\n${setupScript}\nPY`);
     
     // Install dependencies
     console.log('[create-ai-sandbox] Installing dependencies...');
-    await sandbox.runCode(`
-import subprocess
-import sys
-
-print('Installing npm packages...')
-result = subprocess.run(
-    ['npm', 'install'],
-    cwd='/home/user/app',
-    capture_output=True,
-    text=True
-)
-
-if result.returncode == 0:
-    print('✓ Dependencies installed successfully')
-else:
-    print(f'⚠ Warning: npm install had issues: {result.stderr}')
-    # Continue anyway as it might still work
-    `);
+    await execSandbox(sandboxId!, `cd /home/user/app && npm install`);
     
     // Start Vite dev server
     console.log('[create-ai-sandbox] Starting Vite dev server...');
-    await sandbox.runCode(`
-import subprocess
-import os
-import time
-
-os.chdir('/home/user/app')
-
-# Kill any existing Vite processes
-subprocess.run(['pkill', '-f', 'vite'], capture_output=True)
-time.sleep(1)
-
-# Start Vite dev server
-env = os.environ.copy()
-env['FORCE_COLOR'] = '0'
-
-process = subprocess.Popen(
-    ['npm', 'run', 'dev'],
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE,
-    env=env
-)
-
-print(f'✓ Vite dev server started with PID: {process.pid}')
-print('Waiting for server to be ready...')
-    `);
+    await execSandbox(sandboxId!, `cd /home/user/app && pkill -f vite || true && npm run dev &`);
     
     // Wait for Vite to be fully ready
-    await new Promise(resolve => setTimeout(resolve, appConfig.e2b.viteStartupDelay));
+    await new Promise(resolve => setTimeout(resolve, appConfig.sandbox.viteStartupDelay));
     
     // Force Tailwind CSS to rebuild by touching the CSS file
-    await sandbox.runCode(`
-import os
-import time
-
-# Touch the CSS file to trigger rebuild
-css_file = '/home/user/app/src/index.css'
-if os.path.exists(css_file):
-    os.utime(css_file, None)
-    print('✓ Triggered CSS rebuild')
-    
-# Also ensure PostCSS processes it
-time.sleep(2)
-print('✓ Tailwind CSS should be loaded')
-    `);
+    await execSandbox(sandboxId!, `touch /home/user/app/src/index.css`);
 
     // Store sandbox globally
-    global.activeSandbox = sandbox;
+    global.activeSandboxId = sandboxId;
     global.sandboxData = {
       sandboxId,
-      url: `https://${host}`
+      url
     };
-    
-    // Set extended timeout on the sandbox instance if method available
-    if (typeof sandbox.setTimeout === 'function') {
-      sandbox.setTimeout(appConfig.e2b.timeoutMs);
-      console.log(`[create-ai-sandbox] Set sandbox timeout to ${appConfig.e2b.timeoutMinutes} minutes`);
-    }
     
     // Initialize sandbox state
     global.sandboxState = {
@@ -316,10 +253,10 @@ print('✓ Tailwind CSS should be loaded')
         lastSync: Date.now(),
         sandboxId
       },
-      sandbox,
+      sandboxId,
       sandboxData: {
         sandboxId,
-        url: `https://${host}`
+        url
       }
     };
     
@@ -333,12 +270,12 @@ print('✓ Tailwind CSS should be loaded')
     global.existingFiles.add('tailwind.config.js');
     global.existingFiles.add('postcss.config.js');
     
-    console.log('[create-ai-sandbox] Sandbox ready at:', `https://${host}`);
-    
+    console.log('[create-ai-sandbox] Sandbox ready at:', url);
+
     return NextResponse.json({
       success: true,
       sandboxId,
-      url: `https://${host}`,
+      url,
       message: 'Sandbox created and Vite React app initialized'
     });
 
@@ -346,9 +283,9 @@ print('✓ Tailwind CSS should be loaded')
     console.error('[create-ai-sandbox] Error:', error);
     
     // Clean up on error
-    if (sandbox) {
+    if (sandboxId) {
       try {
-        await sandbox.kill();
+        await deleteSandbox(sandboxId);
       } catch (e) {
         console.error('Failed to close sandbox on error:', e);
       }

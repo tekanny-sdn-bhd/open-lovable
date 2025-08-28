@@ -8,8 +8,6 @@
     "test:all": "npm run test:basic && npm run test:operations"
   },
   "dependencies": {
-    "@e2b/code-interpreter": "^1.5.1",
-    "@e2b/sdk": "^0.12.5",
     "dotenv": "^16.0.3"
   }
 }

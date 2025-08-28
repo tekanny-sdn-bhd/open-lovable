@@ -2,12 +2,12 @@
 // This file contains all configurable settings for the application
 
 export const appConfig = {
-  // E2B Sandbox Configuration
-  e2b: {
+  // Sandbox Configuration
+  sandbox: {
     // Sandbox timeout in minutes
     timeoutMinutes: 15,
     
-    // Convert to milliseconds for E2B API
+    // Convert to milliseconds for sandboxd API
     get timeoutMs() {
       return this.timeoutMinutes * 60 * 1000;
     },

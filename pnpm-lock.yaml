@@ -23,9 +23,6 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.57.0
         version: 0.57.0
-      '@e2b/code-interpreter':
-        specifier: ^1.5.1
-        version: 1.5.1
       '@radix-ui/react-slot':
         specifier: ^1.2.3
         version: 1.2.3(@types/react@19.1.9)(react@19.1.0)
@@ -53,9 +50,12 @@ importers:
       dotenv:
         specifier: ^17.2.1
         version: 17.2.1
+<<<<<<< HEAD
       e2b:
         specifier: ^1.13.2
         version: 1.13.2
+=======
+>>>>>>> 45ce4a7 (feat: replace e2b with sandboxd)
       framer-motion:
         specifier: ^12.23.12
         version: 12.23.12(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -189,10 +189,6 @@ packages:
     resolution: {integrity: sha512-ARBt64yEyKbanyRETTjcjJuHr2YXorzQo0etyS5+P6oSeW8xEuzajA9g+zDnMcj1hlX2dQE93foIWQGfpru7gQ==}
     peerDependencies:
       '@bufbuild/protobuf': ^2.2.0
-
-  '@e2b/code-interpreter@1.5.1':
-    resolution: {integrity: sha512-mkyKjAW2KN5Yt0R1I+1lbH3lo+W/g/1+C2lnwlitXk5wqi/g94SEO41XKdmDf5WWpKG3mnxWDR5d6S/lyjmMEw==}
-    engines: {node: '>=18'}
 
   '@emnapi/core@1.4.5':
     resolution: {integrity: sha512-XsLw1dEOpkSX/WucdqUhPWP7hDxSvZiY+fsUC14h+FtQ2Ifni4znbBt8punRX+Uj2JG/uDb8nEHVKvrVlvdZ5Q==}
@@ -1134,9 +1130,12 @@ packages:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
 
+<<<<<<< HEAD
   e2b@1.13.2:
     resolution: {integrity: sha512-m8acE/MzMAJo1A57DakR2X1Sl5Mt1tcQO2aJfygNaQHLXby/4xsjF0UeJUB70jF7xntiR41pAMbZEHnkzrT9tw==}
     engines: {node: '>=18'}
+=======
+>>>>>>> 45ce4a7 (feat: replace e2b with sandboxd)
 
   electron-to-chromium@1.5.199:
     resolution: {integrity: sha512-3gl0S7zQd88kCAZRO/DnxtBKuhMO4h0EaQIN3YgZfV6+pW+5+bf2AdQeHNESCoaQqo/gjGVYEf2YM4O5HJQqpQ==}
@@ -2409,10 +2408,6 @@ snapshots:
     dependencies:
       '@bufbuild/protobuf': 2.6.3
 
-  '@e2b/code-interpreter@1.5.1':
-    dependencies:
-      e2b: 1.13.2
-
   '@emnapi/core@1.4.5':
     dependencies:
       '@emnapi/wasi-threads': 1.0.4
@@ -3289,6 +3284,7 @@ snapshots:
       es-errors: 1.3.0
       gopd: 1.2.0
 
+<<<<<<< HEAD
   e2b@1.13.2:
     dependencies:
       '@bufbuild/protobuf': 2.6.3
@@ -3298,6 +3294,8 @@ snapshots:
       openapi-fetch: 0.9.8
       platform: 1.3.6
 
+=======
+>>>>>>> 45ce4a7 (feat: replace e2b with sandboxd)
   electron-to-chromium@1.5.199: {}
 
   emoji-regex@9.2.2: {}

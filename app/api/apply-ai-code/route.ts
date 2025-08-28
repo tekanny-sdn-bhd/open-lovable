@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { SandboxState } from '@/types/sandbox';
 import type { ConversationState } from '@/types/conversation';
+import { execSandbox, writeFile } from '@/lib/sandboxd';
 
 declare global {
   var conversationState: ConversationState | null;
@@ -127,7 +128,7 @@ function parseAIResponse(response: string): ParsedResponse {
 }
 
 declare global {
-  var activeSandbox: any;
+  var activeSandboxId: string | null;
   var existingFiles: Set<string>;
   var sandboxState: SandboxState;
 }
@@ -151,7 +152,7 @@ export async function POST(request: NextRequest) {
     }
     
     // If no active sandbox, just return parsed results
-    if (!global.activeSandbox) {
+    if (!global.activeSandboxId) {
       return NextResponse.json({
         success: true,
         results: {
@@ -336,11 +337,10 @@ export async function POST(request: NextRequest) {
           fileContent = fileContent.replace(/import\s+['"]\.\/[^'"]+\.css['"];?\s*\n?/g, '');
         }
         
-        console.log(`[apply-ai-code] Writing file using E2B files API: ${fullPath}`);
-        
+        console.log(`[apply-ai-code] Writing file via sandboxd: ${fullPath}`);
+
         try {
-          // Use the correct E2B API - sandbox.files.write()
-          await global.activeSandbox.files.write(fullPath, fileContent);
+          await writeFile(global.activeSandboxId!, fullPath, fileContent);
           console.log(`[apply-ai-code] Successfully wrote file: ${fullPath}`);
           
           // Update file cache
@@ -432,15 +432,7 @@ function App() {
 export default App;`;
       
       try {
-        await global.activeSandbox.runCode(`
-file_path = "/home/user/app/src/App.jsx"
-file_content = """${appContent.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"""
-
-with open(file_path, 'w') as f:
-    f.write(file_content)
-
-print(f"Auto-generated: {file_path}")
-        `);
+        await writeFile(global.activeSandboxId!, '/home/user/app/src/App.jsx', appContent);
         results.filesCreated.push('src/App.jsx (auto-generated)');
       } catch (error) {
         results.errors.push(`Failed to create App.jsx: ${(error as Error).message}`);
@@ -459,37 +451,8 @@ print(f"Auto-generated: {file_path}")
       
       if (!isEdit && !indexCssInParsed && !indexCssExists) {
         try {
-          await global.activeSandbox.runCode(`
-file_path = "/home/user/app/src/index.css"
-file_content = """@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  color-scheme: dark;
-  
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #0a0a0a;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
-}"""
-
-with open(file_path, 'w') as f:
-    f.write(file_content)
-
-print(f"Auto-generated: {file_path}")
-          `);
+          const indexCss = `@tailwind base;\n@tailwind components;\n@tailwind utilities;\n\n:root {\n  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;\n  line-height: 1.5;\n  font-weight: 400;\n  color-scheme: dark;\n\n  color: rgba(255, 255, 255, 0.87);\n  background-color: #0a0a0a;\n}\n\n* {\n  box-sizing: border-box;\n}\n\nbody {\n  margin: 0;\n  min-width: 320px;\n  min-height: 100vh;\n}`;
+          await writeFile(global.activeSandboxId!, '/home/user/app/src/index.css', indexCss);
           results.filesCreated.push('src/index.css (with Tailwind)');
         } catch (error) {
           results.errors.push('Failed to create index.css with Tailwind');
@@ -500,15 +463,7 @@ print(f"Auto-generated: {file_path}")
     // Execute commands
     for (const cmd of parsed.commands) {
       try {
-        await global.activeSandbox.runCode(`
-import subprocess
-os.chdir('/home/user/app')
-result = subprocess.run(${JSON.stringify(cmd.split(' '))}, capture_output=True, text=True)
-print(f"Executed: ${cmd}")
-print(result.stdout)
-if result.stderr:
-    print(f"Errors: {result.stderr}")
-        `);
+        await execSandbox(global.activeSandboxId!, `cd /home/user/app && ${cmd}`);
         results.commandsExecuted.push(cmd);
       } catch (error) {
         results.errors.push(`Failed to execute ${cmd}: ${(error as Error).message}`);

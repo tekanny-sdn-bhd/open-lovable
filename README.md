@@ -18,7 +18,7 @@ npm install
 2. **Add `.env.local`**
 ```env
 # Required
-E2B_API_KEY=your_e2b_api_key  # Get from https://e2b.dev (Sandboxes)
+SANDBOXD_URL=http://localhost:4000  # URL of local sandbox daemon
 FIRECRAWL_API_KEY=your_firecrawl_api_key  # Get from https://firecrawl.dev (Web scraping)
 FIRECRAWL_BASE_URL=https://api.firecrawl.dev/v1  # Optional override for Firecrawl API base URL
 

@@ -22,9 +22,8 @@ export default function SandboxPreview({
 
   useEffect(() => {
     if (sandboxId && type !== 'console') {
-      // In production, this would be the actual E2B sandbox URL
-      // Format: https://{sandboxId}-{port}.e2b.dev
-      setPreviewUrl(`https://${sandboxId}-${port}.e2b.dev`);
+      // Sandboxd exposes containers on localhost with mapped ports
+      setPreviewUrl(`http://localhost:${port}`);
     }
   }, [sandboxId, port, type]);
 
