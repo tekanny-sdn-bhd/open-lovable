@@ -10,7 +10,10 @@ import { executeSearchPlan, formatSearchResultsForAI, selectTargetFile } from '@
 import { FileManifest } from '@/types/file-manifest';
 import type { ConversationState, ConversationMessage, ConversationEdit } from '@/types/conversation';
 import { appConfig } from '@/config/app.config';
-import { createRequire } from 'module';
+// Note: We use OpenAI provider pointed at Ollama's OpenAI-compatible API
+
+// Optional model remapping table (empty by default)
+const modelMapping: Record<string, string> = {};
 
 const groq = createGroq({
   apiKey: process.env.GROQ_API_KEY,
@@ -29,14 +32,21 @@ const openai = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const require = createRequire(import.meta.url);
-let ollama: any;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { createOllama } = require('@ai-sdk/ollama');
-  ollama = createOllama({ baseURL: process.env.OLLAMA_LLM_URL });
-} catch (err) {
-  console.warn('[generate-ai-code-stream] Ollama provider not available');
+// Configure Ollama via OpenAI-compatible endpoint (e.g., http://localhost:11434/v1)
+const ollamaBaseRaw = process.env.OLLAMA_LLM_URL;
+const ollamaBaseURL = ollamaBaseRaw
+  ? (ollamaBaseRaw.endsWith('/v1') ? ollamaBaseRaw : `${ollamaBaseRaw.replace(/\/$/, '')}/v1`)
+  : undefined;
+
+const ollama = ollamaBaseURL
+  ? createOpenAI({
+      apiKey: process.env.OLLAMA_API_KEY || 'ollama',
+      baseURL: ollamaBaseURL,
+    })
+  : null;
+
+if (!ollamaBaseURL) {
+  console.warn('[generate-ai-code-stream] OLLAMA_LLM_URL not set; Ollama models disabled');
 }
 
 // Helper function to analyze user preferences from conversation history
@@ -181,7 +191,7 @@ export async function POST(request: NextRequest) {
           if (manifest) {
             await sendProgress({ type: 'status', message: '🔍 Creating search plan...' });
             
-            const fileContents = global.sandboxState.fileCache.files;
+            const fileContents = global.sandboxState.fileCache!.files;
             console.log('[generate-ai-code-stream] Files available for search:', Object.keys(fileContents).length);
             
             // STEP 1: Get search plan from AI
@@ -342,7 +352,7 @@ User request: "${prompt}"`;
                         
                         // For now, fall back to keyword search since we don't have file contents for search execution
                         // This path happens when no manifest was initially available
-                        let targetFiles = [];
+                        let targetFiles: string[] = [];
                         if (!searchPlan || searchPlan.searchTerms.length === 0) {
                           console.warn('[generate-ai-code-stream] No target files after fetch, searching for relevant files');
                           
@@ -966,14 +976,14 @@ CRITICAL: When files are provided in the context:
                   // Store files in cache
                   for (const [path, content] of Object.entries(filesData.files)) {
                     const normalizedPath = path.replace('/home/user/app/', '');
-                    global.sandboxState.fileCache.files[normalizedPath] = {
+                    global.sandboxState.fileCache!.files[normalizedPath] = {
                       content: content as string,
                       lastModified: Date.now()
                     };
                   }
                   
                   if (filesData.manifest) {
-                    global.sandboxState.fileCache.manifest = filesData.manifest;
+                    global.sandboxState.fileCache!.manifest = filesData.manifest;
                     
                     // Now try to analyze edit intent with the fetched manifest
                     if (!editContext) {
@@ -1004,7 +1014,7 @@ CRITICAL: When files are provided in the context:
                   }
                   
                   // Update variables
-                  backendFiles = global.sandboxState.fileCache.files;
+                  backendFiles = global.sandboxState.fileCache!.files;
                   hasBackendFiles = Object.keys(backendFiles).length > 0;
                   console.log('[generate-ai-code-stream] Updated backend cache with fetched files');
                 }
@@ -1170,6 +1180,7 @@ CRITICAL: When files are provided in the context:
         if (isOllama && !ollama) {
           throw new Error('Ollama provider not configured');
         }
+        // Select model factory with proper null safety for Ollama
         const modelProvider = isAnthropic
           ? anthropic
           : isOpenAI
@@ -1177,7 +1188,7 @@ CRITICAL: When files are provided in the context:
             : isGoogle
               ? googleGenerativeAI
               : isOllama
-                ? ollama
+                ? ((id: string) => (ollama as any).chat(id))
                 : groq;
         const actualModel = isAnthropic
           ? model.replace('anthropic/', '')
@@ -1639,9 +1650,9 @@ Provide the complete file content without any truncation. Include all necessary 
                     },
                     { role: 'user', content: completionPrompt }
                   ],
-                  temperature: isGPT5 ? undefined : appConfig.ai.defaultTemperature,
+                  temperature: isOpenAI ? undefined : appConfig.ai.defaultTemperature,
                   maxTokens: appConfig.ai.truncationRecoveryMaxTokens
-                });
+                } as any);
                 
                 // Get the full text from the stream
                 let completedContent = '';

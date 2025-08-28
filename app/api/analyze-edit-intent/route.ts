@@ -6,7 +6,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import type { FileManifest } from '@/types/file-manifest';
-import { createRequire } from 'module';
+// Note: We use OpenAI provider pointed at Ollama's OpenAI-compatible API
 
 const groq = createGroq({
   apiKey: process.env.GROQ_API_KEY,
@@ -22,14 +22,25 @@ const openai = createOpenAI({
   baseURL: process.env.OPENAI_BASE_URL,
 });
 
-const require = createRequire(import.meta.url);
-let ollama: any;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { createOllama } = require('@ai-sdk/ollama');
-  ollama = createOllama({ baseURL: process.env.OLLAMA_LLM_URL });
-} catch (err) {
-  console.warn('[analyze-edit-intent] Ollama provider not available');
+const googleGenerativeAI = createGoogleGenerativeAI({
+  apiKey: process.env.GEMINI_API_KEY,
+});
+
+// Configure Ollama via OpenAI-compatible endpoint (e.g., http://localhost:11434/v1)
+const ollamaBaseRaw = process.env.OLLAMA_LLM_URL;
+const ollamaBaseURL = ollamaBaseRaw
+  ? (ollamaBaseRaw.endsWith('/v1') ? ollamaBaseRaw : `${ollamaBaseRaw.replace(/\/$/, '')}/v1`)
+  : undefined;
+
+const ollama = ollamaBaseURL
+  ? createOpenAI({
+      apiKey: process.env.OLLAMA_API_KEY || 'ollama',
+      baseURL: ollamaBaseURL,
+    })
+  : null;
+
+if (!ollamaBaseURL) {
+  console.warn('[analyze-edit-intent] OLLAMA_LLM_URL not set; Ollama models disabled');
 }
 
 // Schema for the AI's search plan - not file selection!
@@ -114,13 +125,14 @@ export async function POST(request: NextRequest) {
       } else {
         aiModel = openai(model.replace('openai/', ''));
       }
-    } else if (model.startsWith('google/')) {
-      aiModel = createGoogleGenerativeAI(model.replace('google/', ''));
+  } else if (model.startsWith('google/')) {
+      aiModel = googleGenerativeAI(model.replace('google/', ''));
     } else if (model.startsWith('ollama/')) {
       if (!ollama) {
         throw new Error('Ollama provider not configured');
       }
-      aiModel = ollama(model.replace('ollama/', ''));
+      // Use Chat Completions path for Ollama compatibility
+      aiModel = ollama.chat(model.replace('ollama/', ''));
     } else {
       // Default to groq if model format is unclear
       aiModel = groq(model);
