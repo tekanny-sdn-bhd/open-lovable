@@ -3,16 +3,22 @@ import { NextRequest, NextResponse } from 'next/server';
 export async function POST(req: NextRequest) {
   try {
     const { url } = await req.json();
-    
+
     if (!url) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
     }
 
+    const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY;
+    if (!FIRECRAWL_API_KEY) {
+      throw new Error('FIRECRAWL_API_KEY environment variable is not set');
+    }
+    const FIRECRAWL_BASE_URL = process.env.FIRECRAWL_BASE_URL ?? 'https://api.firecrawl.dev/v1';
+
     // Use Firecrawl API to capture screenshot
-    const firecrawlResponse = await fetch('https://api.firecrawl.dev/v1/scrape', {
+    const firecrawlResponse = await fetch(`${FIRECRAWL_BASE_URL}/scrape`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.FIRECRAWL_API_KEY}`,
+        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({

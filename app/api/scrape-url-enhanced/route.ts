@@ -28,14 +28,15 @@ export async function POST(request: NextRequest) {
     }
     
     console.log('[scrape-url-enhanced] Scraping with Firecrawl:', url);
-    
+
     const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY;
     if (!FIRECRAWL_API_KEY) {
       throw new Error('FIRECRAWL_API_KEY environment variable is not set');
     }
-    
+    const FIRECRAWL_BASE_URL = process.env.FIRECRAWL_BASE_URL ?? 'https://api.firecrawl.dev/v1';
+
     // Make request to Firecrawl API with maxAge for 500% faster scraping
-    const firecrawlResponse = await fetch('https://api.firecrawl.dev/v1/scrape', {
+    const firecrawlResponse = await fetch(`${FIRECRAWL_BASE_URL}/scrape`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,

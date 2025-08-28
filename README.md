@@ -20,6 +20,7 @@ npm install
 # Required
 E2B_API_KEY=your_e2b_api_key  # Get from https://e2b.dev (Sandboxes)
 FIRECRAWL_API_KEY=your_firecrawl_api_key  # Get from https://firecrawl.dev (Web scraping)
+FIRECRAWL_BASE_URL=https://api.firecrawl.dev/v1  # Optional override for Firecrawl API base URL
 
 # Optional (need at least one AI provider)
 ANTHROPIC_API_KEY=your_anthropic_api_key  # Get from https://console.anthropic.com
