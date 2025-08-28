@@ -6,6 +6,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 import type { FileManifest } from '@/types/file-manifest';
+import { createRequire } from 'module';
 
 const groq = createGroq({
   apiKey: process.env.GROQ_API_KEY,
@@ -20,6 +21,16 @@ const openai = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY,
   baseURL: process.env.OPENAI_BASE_URL,
 });
+
+const require = createRequire(import.meta.url);
+let ollama: any;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { createOllama } = require('@ai-sdk/ollama');
+  ollama = createOllama({ baseURL: process.env.OLLAMA_LLM_URL });
+} catch (err) {
+  console.warn('[analyze-edit-intent] Ollama provider not available');
+}
 
 // Schema for the AI's search plan - not file selection!
 const searchPlanSchema = z.object({
@@ -105,6 +116,11 @@ export async function POST(request: NextRequest) {
       }
     } else if (model.startsWith('google/')) {
       aiModel = createGoogleGenerativeAI(model.replace('google/', ''));
+    } else if (model.startsWith('ollama/')) {
+      if (!ollama) {
+        throw new Error('Ollama provider not configured');
+      }
+      aiModel = ollama(model.replace('ollama/', ''));
     } else {
       // Default to groq if model format is unclear
       aiModel = groq(model);

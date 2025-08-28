@@ -10,6 +10,7 @@ import { executeSearchPlan, formatSearchResultsForAI, selectTargetFile } from '@
 import { FileManifest } from '@/types/file-manifest';
 import type { ConversationState, ConversationMessage, ConversationEdit } from '@/types/conversation';
 import { appConfig } from '@/config/app.config';
+import { createRequire } from 'module';
 
 const groq = createGroq({
   apiKey: process.env.GROQ_API_KEY,
@@ -27,6 +28,16 @@ const googleGenerativeAI = createGoogleGenerativeAI({
 const openai = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+const require = createRequire(import.meta.url);
+let ollama: any;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { createOllama } = require('@ai-sdk/ollama');
+  ollama = createOllama({ baseURL: process.env.OLLAMA_LLM_URL });
+} catch (err) {
+  console.warn('[generate-ai-code-stream] Ollama provider not available');
+}
 
 // Helper function to analyze user preferences from conversation history
 function analyzeUserPreferences(messages: ConversationMessage[]): {
@@ -1155,10 +1166,28 @@ CRITICAL: When files are provided in the context:
         const isAnthropic = model.startsWith('anthropic/');
         const isGoogle = model.startsWith('google/');
         const isOpenAI = model.startsWith('openai/gpt-5');
-        const modelProvider = isAnthropic ? anthropic : (isOpenAI ? openai : (isGoogle ? googleGenerativeAI : groq));
-        const actualModel = isAnthropic ? model.replace('anthropic/', '') : 
-                           (model === 'openai/gpt-5') ? 'gpt-5' :
-                           (isGoogle ? model.replace('google/', '') : model);
+        const isOllama = model.startsWith('ollama/');
+        if (isOllama && !ollama) {
+          throw new Error('Ollama provider not configured');
+        }
+        const modelProvider = isAnthropic
+          ? anthropic
+          : isOpenAI
+            ? openai
+            : isGoogle
+              ? googleGenerativeAI
+              : isOllama
+                ? ollama
+                : groq;
+        const actualModel = isAnthropic
+          ? model.replace('anthropic/', '')
+          : model === 'openai/gpt-5'
+            ? 'gpt-5'
+            : isGoogle
+              ? model.replace('google/', '')
+              : isOllama
+                ? model.replace('ollama/', '')
+                : model;
 
         // Make streaming API call with appropriate provider
         const streamOptions: any = {
@@ -1590,6 +1619,13 @@ Provide the complete file content without any truncation. Include all necessary 
                   completionClient = openai;
                 } else if (model.includes('claude')) {
                   completionClient = anthropic;
+                } else if (model.startsWith('google/')) {
+                  completionClient = googleGenerativeAI;
+                } else if (model.startsWith('ollama/')) {
+                  if (!ollama) {
+                    throw new Error('Ollama provider not configured');
+                  }
+                  completionClient = ollama;
                 } else {
                   completionClient = groq;
                 }
