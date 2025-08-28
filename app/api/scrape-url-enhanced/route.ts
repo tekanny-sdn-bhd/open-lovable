@@ -29,17 +29,20 @@ export async function POST(request: NextRequest) {
     
     console.log('[scrape-url-enhanced] Scraping with Firecrawl:', url);
 
+    const FIRECRAWL_BASE_URL = process.env.FIRECRAWL_BASE_URL ?? 'https://api.firecrawl.dev/v1';
     const FIRECRAWL_API_KEY = process.env.FIRECRAWL_API_KEY;
-    if (!FIRECRAWL_API_KEY) {
+    const FIRECRAWL_DISABLE_AUTH = (process.env.FIRECRAWL_DISABLE_AUTH || '').toLowerCase() === 'true';
+    const isLocalBase = /^https?:\/\/(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2[0-9]|3[0-1])\.\d+\.\d+)/.test(FIRECRAWL_BASE_URL);
+
+    if (!FIRECRAWL_API_KEY && !FIRECRAWL_DISABLE_AUTH && !isLocalBase) {
       throw new Error('FIRECRAWL_API_KEY environment variable is not set');
     }
-    const FIRECRAWL_BASE_URL = process.env.FIRECRAWL_BASE_URL ?? 'https://api.firecrawl.dev/v1';
 
     // Make request to Firecrawl API with maxAge for 500% faster scraping
     const firecrawlResponse = await fetch(`${FIRECRAWL_BASE_URL}/scrape`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
+        ...(FIRECRAWL_API_KEY && !FIRECRAWL_DISABLE_AUTH ? { 'Authorization': `Bearer ${FIRECRAWL_API_KEY}` } : {}),
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
