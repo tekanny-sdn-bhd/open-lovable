@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { SandboxState } from '@/types/sandbox';
 import { appConfig } from '@/config/app.config';
-import { createSandbox, execSandbox, deleteSandbox } from '@/lib/sandboxd';
+import { createSandbox, execSandbox, deleteSandbox, healthCheck, exposePort } from '@/lib/sandboxd';
 
 // Store active sandbox globally
 declare global {
@@ -16,6 +16,12 @@ export async function POST() {
 
   try {
     console.log('[create-ai-sandbox] Creating base sandbox...');
+
+    // Verify sandboxd health first
+    const healthy = await healthCheck();
+    if (!healthy) {
+      console.warn('[create-ai-sandbox] Sandbox health check failed; attempting to create anyway...');
+    }
     
     // Kill existing sandbox if any
     if (global.activeSandboxId) {
@@ -37,10 +43,11 @@ export async function POST() {
 
     // Create base sandbox - we'll set up Vite ourselves for full control
     console.log('[create-ai-sandbox] Creating sandbox via sandboxd...');
-    const info = await createSandbox();
+    const info = await createSandbox('node');
     sandboxId = info.id;
     const host = info.host;
-    const url = `http://${info.host}:${info.port}`;
+    // URL may be provided after expose; default to host:port if present
+    let url = info.host && info.port ? `http://${info.host}:${info.port}` : '';
 
     console.log(`[create-ai-sandbox] Sandbox created: ${sandboxId}`);
     console.log(`[create-ai-sandbox] Sandbox host: ${url}`);
@@ -238,6 +245,17 @@ print('\\nAll files created successfully!')
     
     // Force Tailwind CSS to rebuild by touching the CSS file
     await execSandbox(sandboxId!, `touch /home/user/app/src/index.css`);
+
+    // Expose dev server for external access if supported by sandboxd
+    try {
+      const exposed = await exposePort(sandboxId!, appConfig.sandbox.vitePort);
+      if (exposed?.url) {
+        url = exposed.url;
+        console.log('[create-ai-sandbox] Exposed URL:', url);
+      }
+    } catch (exErr) {
+      console.warn('[create-ai-sandbox] exposePort failed or unsupported, falling back to host:port if available.', exErr);
+    }
 
     // Store sandbox globally
     global.activeSandboxId = sandboxId;

@@ -18,7 +18,8 @@ npm install
 2. **Add `.env.local`**
 ```env
 # Required
-SANDBOXD_URL=http://localhost:4000  # URL of local sandbox daemon
+SANDBOX_URL=http://localhost:7070  # URL of sandbox daemon (docker compose up -d)
+SANDBOX_API_KEY=                     # Optional: if your daemon requires it (sent as X-API-Key)
 FIRECRAWL_API_KEY=your_firecrawl_api_key  # Get from https://firecrawl.dev (Web scraping)
 FIRECRAWL_BASE_URL=https://api.firecrawl.dev/v1  # Optional override for Firecrawl API base URL
 

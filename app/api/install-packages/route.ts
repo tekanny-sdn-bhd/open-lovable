@@ -15,7 +15,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'No active sandbox available' }, { status: 400 });
     }
     const pkgList = packages.join(' ');
-    const result = await execSandbox(global.activeSandboxId, `cd /home/user/app && pnpm add ${pkgList}`);
+    // Use npm for wider compatibility inside the sandbox image
+    const result = await execSandbox(global.activeSandboxId, `cd /home/user/app && npm install ${pkgList}`);
     return NextResponse.json({ success: result.code === 0, output: result.stdout, error: result.stderr });
   } catch (error) {
     return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });

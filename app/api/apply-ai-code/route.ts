@@ -353,7 +353,7 @@ export async function POST(request: NextRequest) {
           }
           
         } catch (writeError) {
-          console.error(`[apply-ai-code] E2B file write error:`, writeError);
+          console.error(`[apply-ai-code] sandbox file write error:`, writeError);
           throw writeError;
         }
         
