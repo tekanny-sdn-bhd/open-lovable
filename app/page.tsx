@@ -2393,7 +2393,21 @@ Focus on the key sections and content, making it clean and modern while preservi
       try {
         // Scrape the website
         let url = homeUrlInput.trim();
-        if (!url.match(/^https?:\/\//i)) {
+        // Extract the first URL-like token (supports full URLs or bare domains)
+        const urlMatch =
+          homeUrlInput.match(/https?:\/\/[^\s"'<>]+/i) ||
+          homeUrlInput.match(/(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:\/[^\s"'<>]*)?/);
+
+        if (!urlMatch) {
+          setUrlStatus(prev => [...prev, 'Please enter a valid URL']);
+          throw new Error('Invalid URL input');
+        }
+
+        // Normalize and strip trailing punctuation
+        url = urlMatch[0].replace(/[.,)\];'"»]+$/, '');
+
+        // Ensure protocol
+        if (!/^https?:\/\//i.test(url)) {
           url = 'https://' + url;
         }
         

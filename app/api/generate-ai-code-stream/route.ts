@@ -196,7 +196,7 @@ export async function POST(request: NextRequest) {
 
             // STEP 1: Get search plan from AI
             try {
-              const intentResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/analyze-edit-intent`, {
+              const intentResponse = await fetch(`${request.nextUrl.origin}/api/analyze-edit-intent`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ prompt, manifest, model })
@@ -326,7 +326,7 @@ User request: "${prompt}"`;
 
               try {
                 // Fetch files directly from sandbox
-                const filesResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/get-sandbox-files`, {
+                const filesResponse = await fetch(`${request.nextUrl.origin}/api/get-sandbox-files`, {
                   method: 'GET',
                   headers: { 'Content-Type': 'application/json' }
                 });
@@ -340,7 +340,7 @@ User request: "${prompt}"`;
 
                     // Now try to analyze edit intent with the fetched manifest
                     try {
-                      const intentResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/analyze-edit-intent`, {
+                      const intentResponse = await fetch(`${request.nextUrl.origin}/api/analyze-edit-intent`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ prompt, manifest, model })
@@ -946,7 +946,7 @@ CRITICAL: When files are provided in the context:
             console.log('[generate-ai-code-stream] No backend files, attempting to fetch from sandbox...');
 
             try {
-              const filesResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/get-sandbox-files`, {
+              const filesResponse = await fetch(`${request.nextUrl.origin}/api/get-sandbox-files`, {
                 method: 'GET',
                 headers: { 'Content-Type': 'application/json' }
               });
@@ -988,12 +988,12 @@ CRITICAL: When files are provided in the context:
                     // Now try to analyze edit intent with the fetched manifest
                     if (!editContext) {
                       console.log('[generate-ai-code-stream] Analyzing edit intent with fetched manifest');
-                      try {
-                        const intentResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/analyze-edit-intent`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ prompt, manifest: filesData.manifest, model })
-                        });
+                    try {
+                      const intentResponse = await fetch(`${request.nextUrl.origin}/api/analyze-edit-intent`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ prompt, manifest: filesData.manifest, model })
+                      });
 
                         if (intentResponse.ok) {
                           const { searchPlan } = await intentResponse.json();

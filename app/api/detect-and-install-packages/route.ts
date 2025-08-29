@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     if (uniquePackages.length === 0) {
       return NextResponse.json({ success: true, packagesInstalled: [], message: 'No new packages to install' });
     }
-    const resp = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/install-packages`, {
+    const resp = await fetch(`${request.nextUrl.origin}/api/install-packages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ packages: uniquePackages })
