@@ -42,7 +42,10 @@ const ollama = ollamaBaseURL
   ? createOpenAI({
     apiKey: process.env.OLLAMA_API_KEY || 'ollama',
     baseURL: ollamaBaseURL,
-  })
+    // Many OpenAI-compatible servers (including Ollama) expose only /v1/chat/completions
+    // Using compatibility: 'compatible' forces the SDK to use the Chat Completions API
+    compatibility: 'compatible'
+  } as any)
   : null;
 
 if (!ollamaBaseURL) {
@@ -321,7 +324,7 @@ User request: "${prompt}"`;
             console.log('[generate-ai-code-stream] WARNING: No manifest available for edit mode!');
 
             // Try to fetch files from sandbox if we have one
-            if (global.activeSandbox) {
+            if (global.activeSandboxId) {
               await sendProgress({ type: 'status', message: 'Fetching current files from sandbox...' });
 
               try {
@@ -942,7 +945,7 @@ CRITICAL: When files are provided in the context:
           console.log('[generate-ai-code-stream] - Has manifest:', !!global.sandboxState?.fileCache?.manifest);
 
           // If no backend files and we're in edit mode, try to fetch from sandbox
-          if (!hasBackendFiles && isEdit && (global.activeSandbox || context?.sandboxId)) {
+          if (!hasBackendFiles && isEdit && (global.activeSandboxId || context?.sandboxId)) {
             console.log('[generate-ai-code-stream] No backend files, attempting to fetch from sandbox...');
 
             try {
@@ -1188,7 +1191,7 @@ CRITICAL: When files are provided in the context:
             : isGoogle
               ? googleGenerativeAI
               : isOllama
-                ? ((id: string) => (ollama as any).chat(id))
+                ? (ollama as any)
                 : groq;
         const actualModel = isAnthropic
           ? model.replace('anthropic/', '')

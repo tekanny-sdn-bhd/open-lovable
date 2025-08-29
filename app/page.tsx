@@ -1467,8 +1467,8 @@ Tip: I automatically detect and install npm packages from your code imports (lik
     return null;
   };
 
-  const sendChatMessage = async () => {
-    const message = aiChatInput.trim();
+  const sendChatMessage = async (overrideMessage?: string) => {
+    const message = (overrideMessage ?? aiChatInput).trim();
     if (!message) return;
     
     if (!aiEnabled) {
@@ -1991,6 +1991,7 @@ Tip: I automatically detect and install npm packages from your code imports (lik
   };
 
 
+  /* Deprecated: unused
   const cloneWebsite = async () => {
     let url = urlInput.trim();
     if (!url) {
@@ -2314,6 +2315,7 @@ Focus on the key sections and content, making it clean and modern while preservi
       setActiveTab('preview');
     }
   };
+  */
 
   const captureUrlScreenshot = async (url: string) => {
     setIsCapturingScreenshot(true);
@@ -2351,26 +2353,48 @@ Focus on the key sections and content, making it clean and modern while preservi
   const handleHomeScreenSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!homeUrlInput.trim()) return;
-    
+
+    // If the input is NOT a URL, treat it as a prompt and route to chat-based generation
+    const rawInput = homeUrlInput.trim();
+    const urlMatch =
+      rawInput.match(/https?:\/\/[A-Za-z0-9._~%\-]+(?::\d+)?[^\s'"<>]*/i) ||
+      rawInput.match(/(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:\/[^\s'"<>]*)?/);
+
+    if (!urlMatch) {
+      // Close the home screen and send the prompt via chat flow (which handles sandbox creation)
+      setShowHomeScreen(false);
+      setHomeScreenFading(false);
+      setActiveTab('generation');
+      setChatMessages([]);
+      await sendChatMessage(rawInput);
+      return;
+    }
+
     setHomeScreenFading(true);
     
-    // Clear messages and immediately show the cloning message
+    // Clear messages and immediately show the cloning/multi-site message
     setChatMessages([]);
-    let displayUrl = homeUrlInput.trim();
-    if (!displayUrl.match(/^https?:\/\//i)) {
-      displayUrl = 'https://' + displayUrl;
+    const httpMatches = Array.from(rawInput.matchAll(/https?:\/\/[A-Za-z0-9._~%\-]+(?::\d+)?[^\s'"<>]*/gi)).map(m => m[0]);
+    const domainMatches = Array.from(rawInput.matchAll(/(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:\/[^\s'"<>]*)?/g)).map(m => m[0]);
+    const candidates = [...httpMatches, ...domainMatches];
+    const normalizedUrls = Array.from(new Set(candidates.map(c => {
+      const cleaned = c.replace(/[.,)\];'"»]+$/, '');
+      return /^https?:\/\//i.test(cleaned) ? cleaned : `https://${cleaned}`;
+    })));
+    if (normalizedUrls.length > 1) {
+      addChatMessage(`Starting multi-site generation for ${normalizedUrls.length} sources`, 'system');
+    } else {
+      const cleanUrl = normalizedUrls[0].replace(/^https?:\/\//i, '');
+      addChatMessage(`Starting to clone ${cleanUrl}...`, 'system');
     }
-    // Remove protocol for cleaner display
-    const cleanUrl = displayUrl.replace(/^https?:\/\//i, '');
-    addChatMessage(`Starting to clone ${cleanUrl}...`, 'system');
     
     // Start creating sandbox and capturing screenshot immediately in parallel
     const sandboxPromise = !sandboxData ? createSandbox(true) : Promise.resolve();
     
     // Only capture screenshot if we don't already have a sandbox (first generation)
     // After sandbox is set up, skip the screenshot phase for faster generation
-    if (!sandboxData) {
-      captureUrlScreenshot(displayUrl);
+    if (!sandboxData && normalizedUrls.length > 0) {
+      captureUrlScreenshot(normalizedUrls[0]);
     }
     
     // Set loading stage immediately before hiding home screen
@@ -2391,45 +2415,27 @@ Focus on the key sections and content, making it clean and modern while preservi
       setUrlStatus(['Scraping website content...']);
       
       try {
-        // Scrape the website
-        let url = homeUrlInput.trim();
-        // Extract the first URL-like token (supports full URLs or bare domains)
-        const urlMatch =
-          homeUrlInput.match(/https?:\/\/[^\s"'<>]+/i) ||
-          homeUrlInput.match(/(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(?:\/[^\s"'<>]*)?/);
-
-        if (!urlMatch) {
-          setUrlStatus(prev => [...prev, 'Please enter a valid URL']);
-          throw new Error('Invalid URL input');
+        // Scrape one or more websites
+        const scrapeResults: Array<{ url: string; data: any }> = [];
+        const urlsToScrape = normalizedUrls && normalizedUrls.length > 0 ? normalizedUrls : [];
+        for (const [i, url] of urlsToScrape.entries()) {
+          setUrlStatus([`Scraping (${i + 1}/${urlsToScrape.length}): ${url}`]);
+          const scrapeResponse = await fetch('/api/scrape-url-enhanced', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url })
+          });
+          if (!scrapeResponse.ok) {
+            throw new Error(`Failed to scrape: ${url}`);
+          }
+          const scrapeData = await scrapeResponse.json();
+          if (!scrapeData.success) {
+            throw new Error(scrapeData.error || `Failed to scrape: ${url}`);
+          }
+          scrapeResults.push({ url, data: scrapeData });
         }
 
-        // Normalize and strip trailing punctuation
-        url = urlMatch[0].replace(/[.,)\];'"»]+$/, '');
-
-        // Ensure protocol
-        if (!/^https?:\/\//i.test(url)) {
-          url = 'https://' + url;
-        }
-        
-        // Screenshot is already being captured in parallel above
-        
-        const scrapeResponse = await fetch('/api/scrape-url-enhanced', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url })
-        });
-        
-        if (!scrapeResponse.ok) {
-          throw new Error('Failed to scrape website');
-        }
-        
-        const scrapeData = await scrapeResponse.json();
-        
-        if (!scrapeData.success) {
-          throw new Error(scrapeData.error || 'Failed to scrape website');
-        }
-        
-        setUrlStatus(['Website scraped successfully!', 'Generating React app...']);
+        setUrlStatus(['Websites scraped successfully!', 'Generating React app...']);
         
         // Clear preparing design state and switch to generation tab
         setIsPreparingDesign(false);
@@ -2445,38 +2451,23 @@ Focus on the key sections and content, making it clean and modern while preservi
           setActiveTab('generation');
         }, 1500);
         
-        // Store scraped data in conversation context
+        // Store scraped data in conversation context (single or multiple)
         setConversationContext(prev => ({
           ...prev,
-          scrapedWebsites: [...prev.scrapedWebsites, {
-            url: url,
-            content: scrapeData,
-            timestamp: new Date()
-          }],
-          currentProject: `${url} Clone`
+          scrapedWebsites: [
+            ...prev.scrapedWebsites,
+            ...scrapeResults.map(s => ({ url: s.url, content: s.data, timestamp: new Date() }))
+          ],
+          currentProject: scrapeResults.length === 1
+            ? `${scrapeResults[0].url} Clone`
+            : `Multi-source: ${scrapeResults.map(s => s.url.replace(new RegExp('^https?://','i'), '')).join(', ')}`
         }));
-        
-        const prompt = `I want to recreate the ${url} website as a complete React application based on the scraped content below.
 
-${JSON.stringify(scrapeData, null, 2)}
-
-${homeContextInput ? `ADDITIONAL CONTEXT/REQUIREMENTS FROM USER:
-${homeContextInput}
-
-Please incorporate these requirements into the design and implementation.` : ''}
-
-IMPORTANT INSTRUCTIONS:
-- Create a COMPLETE, working React application
-- Implement ALL sections and features from the original site
-- Use Tailwind CSS for all styling (no custom CSS files)
-- Make it responsive and modern
-- Ensure all text content matches the original
-- Create proper component structure
-- Make sure the app actually renders visible content
-- Create ALL components that you reference in imports
-${homeContextInput ? '- Apply the user\'s context/theme requirements throughout the application' : ''}
-
-Focus on the key sections and content, making it clean and modern.`;
+        // Build prompt for single vs multiple sources
+        const combined = scrapeResults.map((s, idx) => `--- [${idx + 1}] URL: ${s.url}\n${JSON.stringify(s.data, null, 2)}`).join('\n\n');
+        const prompt = scrapeResults.length === 1
+          ? `I want to recreate the ${scrapeResults[0].url} website as a complete React application based on the scraped content below.\n\n${JSON.stringify(scrapeResults[0].data, null, 2)}\n\n${homeContextInput ? `ADDITIONAL CONTEXT/REQUIREMENTS FROM USER:\n${homeContextInput}\n\nPlease incorporate these requirements into the design and implementation.` : ''}\n\nIMPORTANT INSTRUCTIONS:\n- Create a COMPLETE, working React application\n- Implement ALL sections and features from the original site\n- Use Tailwind CSS for all styling (no custom CSS files)\n- Make it responsive and modern\n- Ensure all text content matches the original\n- Create proper component structure\n- Make sure the app actually renders visible content\n- Create ALL components that you reference in imports\n${homeContextInput ? '- Apply the user\'s context/theme requirements throughout the application' : ''}\n\nFocus on the key sections and content, making it clean and modern.`
+          : `I want to build a new React application that thoughtfully combines ideas from the following reference websites. Understand my intent from the input and use the references appropriately (do not blindly merge; design a cohesive app).\n\nUSER INPUT:\n${rawInput}\n\n${homeContextInput ? `ADDITIONAL CONTEXT/REQUIREMENTS FROM USER:\n${homeContextInput}\n` : ''}\n\nSCRAPED REFERENCES:\n${combined}\n\nGUIDELINES:\n- Produce a complete, working React app using Tailwind for all styling\n- Extract layout patterns, component structure, and content from the references where relevant\n- Resolve conflicts by prioritizing clarity, consistency, and responsiveness\n- Do not import routing; keep a single-page structure with section anchors\n- Ensure App.jsx imports and renders all sections (Header, Hero, Features, Footer, etc.)\n- Implement only packages if explicitly necessary (otherwise stick to React)\n- Use actual image URLs found in the references where appropriate\n\nDELIVERABLES:\n- src/index.css, src/App.jsx, and all referenced components in src/components/`;
         
         setGenerationProgress(prev => ({
           isGenerating: true,
@@ -2678,25 +2669,29 @@ Focus on the key sections and content, making it clean and modern.`;
         
         if (generatedCode) {
           addChatMessage('AI recreation generated!', 'system');
-          
-          // Add the explanation to chat if available
+
           if (explanation && explanation.trim()) {
             addChatMessage(explanation, 'ai');
           }
-          
+
           setPromptInput(generatedCode);
-          
-          // First application for cloned site should not be in edit mode
+
+          // First application for cloned/multi-source site should not be in edit mode
           await applyGeneratedCode(generatedCode, false);
-          
+
+          const sources = typeof scrapeResults !== 'undefined' ? scrapeResults : [];
+          const summary = sources.length === 1
+            ? `Successfully recreated ${sources[0].url} as a modern React app`
+            : sources.length > 1
+              ? `Successfully generated an app from ${sources.length} sources: ${sources.map(s => s.url.replace(new RegExp('^https?://','i'), '')).join(', ')}`
+              : 'Code generated!';
+
           addChatMessage(
-            `Successfully recreated ${url} as a modern React app${homeContextInput ? ` with your requested context: "${homeContextInput}"` : ''}! The scraped content is now in my context, so you can ask me to modify specific sections or add features based on the original site.`, 
+            `${summary}${homeContextInput ? ` with your requested context: "${homeContextInput}"` : ''}.` + (sources.length > 0 ? ' The scraped content is now in my context for follow-up edits.' : ''),
             'ai',
-            {
-              scrapedUrl: url,
-              scrapedContent: scrapeData,
-              generatedCode: generatedCode
-            }
+            sources.length === 1
+              ? { scrapedUrl: sources[0].url, scrapedContent: sources[0].data, generatedCode }
+              : { generatedCode }
           );
           
           setConversationContext(prev => ({
